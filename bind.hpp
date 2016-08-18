@@ -2,16 +2,21 @@
 
 #include <functional>
 #include <type_traits>
-#include <experimental/tuple>
+#include <tuple>
 
 template<class T, class UnBoundArgTpl>
-constexpr T& get_final_args(std::reference_wrapper<T> tid, UnBoundArgTpl&& unbound_args)
-{
+constexpr T& get_final_args(std::reference_wrapper<T> tid, UnBoundArgTpl&& unbound_args) {
     return tid.get();
 }
 
 template<class cvTiD, class UnBoundArgTpl,
-         int idx = std::is_placeholder<std::remove_cv_t<cvTiD>>{},
+         std::enable_if_t<std::is_bind_expression_v<std::remove_cv_t<cvTiD>>>* = nullptr>
+constexpr decltype(auto) get_final_args(cvTiD& tid, UnBoundArgTpl&& unbound_args) {
+     return std::apply(tid, std::move(unbound_args));
+}
+             
+template<class cvTiD, class UnBoundArgTpl,
+         int idx = std::is_placeholder_v<std::remove_cv_t<cvTiD>>,
          std::enable_if_t<(idx > 0)>* = nullptr>
 constexpr decltype(auto) get_final_args(cvTiD& tid, UnBoundArgTpl&& unbound_args)
 {
@@ -19,47 +24,56 @@ constexpr decltype(auto) get_final_args(cvTiD& tid, UnBoundArgTpl&& unbound_args
 }
 
 template<class cvTiD, class UnBoundArgTpl,
-         std::enable_if_t<std::is_placeholder<std::remove_cv_t<cvTiD>>{} <= 0>* = nullptr>
+         std::enable_if_t<!std::is_bind_expression_v<std::remove_cv_t<cvTiD>> &&
+                          std::is_placeholder_v<std::remove_cv_t<cvTiD>> <= 0>* = nullptr>
 constexpr cvTiD& get_final_args(cvTiD& tid, UnBoundArgTpl&& unbound_args)
 {
     return tid;
 }
 
-template<class F, class BoundArgTpl, std::size_t... idx, class UnBoundArgTpl>
-decltype(auto) bind_apply_unwrap_bound_args(F& f, BoundArgTpl&& bound_args, std::index_sequence<idx...>, UnBoundArgTpl&& unbound_args)
-{
-    return f(get_final_args(std::get<idx>(bound_args), static_cast<UnBoundArgTpl&&>(unbound_args))...);
-}
-
-template<class FD, class ArgTpl, class R = void(void)>
+template<class FD, class R, class... BoundArgs>
 struct Bind {
     FD fd;
-    ArgTpl bound_args;
+    std::tuple<std::decay_t<BoundArgs>...> bound_args;
 private:
-    static constexpr std::size_t arity = std::tuple_size<ArgTpl>{};
+    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx>
+    static constexpr decltype(auto) unwrap_bound_args(cvFD& fd,
+                         /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
+                                                      std::index_sequence<idx...>,
+                          /* std::tuple<Vi&&...>&& */ std::tuple<UnBoundArgs...>&& unbound_args
+                                              ) {
+        return fd((get_final_args)(std::get<idx>(bound_args), std::move(unbound_args))...);
+    }
 public:
     template<class... UnBoundArgs>
-    constexpr auto operator()(UnBoundArgs&&... unbound_args)
-    {
-        return bind_apply_unwrap_bound_args(fd, bound_args, std::make_index_sequence<arity>{}, std::forward_as_tuple(std::forward<UnBoundArgs>(unbound_args)...));
+    constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) {
+        return unwrap_bound_args(fd, bound_args,
+                                 std::index_sequence_for<BoundArgs...>{},
+                                 std::forward_as_tuple(std::forward<UnBoundArgs>(unbound_args)...));
     }
     
     template<class... UnBoundArgs>
-    constexpr auto operator()(UnBoundArgs&&... unbound_args) const
-    {
-        return bind_apply_unwrap_bound_args(fd, bound_args, std::make_index_sequence<arity>{}, std::forward_as_tuple(std::forward<UnBoundArgs>(unbound_args)...));
+    constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) const {
+        return unwrap_bound_args(fd, bound_args,
+                                 std::index_sequence_for<BoundArgs...>{},
+                                 std::forward_as_tuple(std::forward<UnBoundArgs>(unbound_args)...));
     }
 };
 
+namespace std {
+    template<class FD, class R, class... BoundArgs>
+    struct is_bind_expression<Bind<FD, R, BoundArgs...>> : true_type {};
+}
+
 template<class F, class... BoundArgs>
-constexpr Bind<std::decay_t<F>, std::tuple<std::decay_t<BoundArgs>...>>
+constexpr Bind<std::decay_t<F>, void(void), BoundArgs...>
   bind(F&& f, BoundArgs&&... bound_args)
 {
     return { std::forward<F>(f), { std::forward<BoundArgs>(bound_args)... } };
 }
 
 template<class R, class F, class... BoundArgs>
-constexpr Bind<std::decay_t<F>, std::tuple<std::decay_t<BoundArgs>...>, R>
+constexpr Bind<std::decay_t<F>, R, BoundArgs...>
   bind(F&& f, BoundArgs&&... bound_args)
 {
     return { std::forward<F>(f), { std::forward<BoundArgs>(bound_args)... } };
