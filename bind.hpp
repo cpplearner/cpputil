@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <tuple>
 
+#include "invoke.hpp"
+
 template<class T, class UnBoundArgTpl>
 constexpr T& get_final_args(std::reference_wrapper<T> tid, UnBoundArgTpl&& unbound_args) {
     return tid.get();
@@ -36,13 +38,23 @@ struct Bind {
     FD fd;
     std::tuple<std::decay_t<BoundArgs>...> bound_args;
 private:
-    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx>
+    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
+             class T = R, std::enable_if_t<std::is_same_v<T,void(void)>>* = nullptr>
     static constexpr decltype(auto) unwrap_bound_args(cvFD& fd,
                          /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
                                                       std::index_sequence<idx...>,
                           /* std::tuple<Vi&&...>&& */ std::tuple<UnBoundArgs...>&& unbound_args
                                               ) {
-        return fd((get_final_args)(std::get<idx>(bound_args), std::move(unbound_args))...);
+        return (invoke)(fd,(get_final_args)(std::get<idx>(bound_args), std::move(unbound_args))...);
+    }
+    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
+             class T = R, std::enable_if_t<!std::is_same_v<T,void(void)>>* = nullptr>
+    static constexpr T unwrap_bound_args(cvFD& fd,
+            /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
+                                         std::index_sequence<idx...>,
+             /* std::tuple<Vi&&...>&& */ std::tuple<UnBoundArgs...>&& unbound_args
+                                        ) {
+        return (invoke<T>)(fd,(get_final_args)(std::get<idx>(bound_args), std::move(unbound_args))...);
     }
 public:
     template<class... UnBoundArgs>
