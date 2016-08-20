@@ -44,7 +44,7 @@ private:
                          /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
                                                       std::index_sequence<idx...>,
                           /* std::tuple<Vi&&...>&& */ std::tuple<UnBoundArgs...>&& unbound_args
-                                              ) {
+                                                     ) {
         return (invoke)(fd,(get_final_args)(std::get<idx>(bound_args), std::move(unbound_args))...);
     }
     template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
@@ -75,6 +75,8 @@ public:
 namespace std {
     template<class FD, class R, class... BoundArgs>
     struct is_bind_expression<Bind<FD, R, BoundArgs...>> : true_type {};
+    template<class FD, class R, class... BoundArgs>
+    struct is_bind_expression<const Bind<FD, R, BoundArgs...>> : true_type {};
 }
 
 template<class F, class... BoundArgs>
