@@ -3,10 +3,10 @@
 /*
     synopsis
 
-    struct user_provided_tag {
-        explicit user_provided_tag() = default;
+    struct user_provided_t {
+        explicit user_provided_t() = default;
     };
-    constexpr user_provided_tag user_provided_t{};
+    constexpr user_provided_t user_provided{};
 
     template<bool cond, class T> struct default_copy_ctor_if;
     template<bool cond, class T> struct default_move_ctor_if;
@@ -17,10 +17,10 @@
     template<bool cond, class T> struct delete_copy_assign_if;
     template<bool cond, class T> struct delete_move_assign_if;
 */
-struct user_provided_tag {
-    explicit user_provided_tag() = default;
+struct user_provided_t {
+    explicit user_provided_t() = default;
 };
-constexpr user_provided_tag user_provided_t{};
+constexpr user_provided_t user_provided{};
 
 // All the following class templates inherit from the template parameter T and
 // introduce T's constructors and assignment operators into their own scope
@@ -31,7 +31,7 @@ constexpr user_provided_tag user_provided_t{};
 // defaulted if the first template argument is not false, otherwise it is
 // user-provided and calls T's constructor (if the special member function is
 // a constructor) or T's member function named assign (if the special member
-// function is operator=), with user_provided_t being the first function
+// function is operator=), with user_provided being the first function
 // argument and the argument to the special member function being the second.
 // For each of delete_*_if, the corresponding special member function is
 // deleted if the first template argument is true, otherwise it is defaulted.
@@ -47,7 +47,7 @@ struct default_copy_ctor_if<false, T> : T {
     using T::operator=;
     default_copy_ctor_if() = default;
     constexpr default_copy_ctor_if(const default_copy_ctor_if& that)
-        : T(user_provided_t, that) {}
+        : T(user_provided, that) {}
     default_copy_ctor_if(default_copy_ctor_if&&) = default;
     default_copy_ctor_if& operator=(const default_copy_ctor_if&) = default;
     default_copy_ctor_if& operator=(default_copy_ctor_if&&) = default;
@@ -65,7 +65,7 @@ struct default_move_ctor_if<false, T> : T {
     default_move_ctor_if() = default;
     default_move_ctor_if(const default_move_ctor_if&) = default;
     constexpr default_move_ctor_if(default_move_ctor_if&& that)
-        : T(user_provided_t, static_cast<decltype(that)>(that)) {}
+        : T(user_provided, static_cast<decltype(that)>(that)) {}
     default_move_ctor_if& operator=(const default_move_ctor_if&) = default;
     default_move_ctor_if& operator=(default_move_ctor_if&&) = default;
 };
@@ -83,7 +83,7 @@ struct default_copy_assign_if<false, T> : T {
     default_copy_assign_if(const default_copy_assign_if&) = default;
     default_copy_assign_if(default_copy_assign_if&&) = default;
     constexpr auto& operator=(const default_copy_assign_if& that) {
-        T::assign(user_provided_t, that);
+        T::assign(user_provided, that);
         return *this;
     }
     default_copy_assign_if& operator=(default_copy_assign_if&&) = default;
@@ -103,7 +103,7 @@ struct default_move_assign_if<false, T> : T {
     default_move_assign_if(default_move_assign_if&&) = default;
     default_move_assign_if& operator=(const default_move_assign_if&) = default;
     constexpr auto& operator=(default_move_assign_if&& that) {
-        T::assign(user_provided_t, static_cast<decltype(that)>(that));
+        T::assign(user_provided, static_cast<decltype(that)>(that));
         return *this;
     }
 };
