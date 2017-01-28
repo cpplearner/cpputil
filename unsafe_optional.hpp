@@ -95,7 +95,7 @@ template<class T>
 union unsafe_optional_data<T,
     std::enable_if_t<!std::is_trivially_destructible<T>{}()>
 > {
-    friend unsafe_optional<T>;
+    friend unsafe_optional_impl<T>;
 private:
     unsigned char uninitialized;
     T val;
@@ -141,7 +141,7 @@ public:
     unsafe_optional_impl(const unsafe_optional_impl&) = default;
     unsafe_optional_impl(unsafe_optional_impl&&) = default;
     [[noreturn]]
-    unsafe_optional_impl(user_provided_tag, unsafe_optional_impl&&) {
+    unsafe_optional_impl(user_provided_t, unsafe_optional_impl&&) {
         throw std::runtime_error("unsafe_optional move constructor called");
     }
     constexpr unsafe_optional_impl(const T& v) : data(std::in_place, v) {}
