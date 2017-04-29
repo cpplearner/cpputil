@@ -7,71 +7,71 @@
 #include "is_reference_wrapper.hpp"
 #include "invoke.hpp"
 
-template<class TiD,
-    bool = is_reference_wrapper_v<TiD>,
-    bool = std::is_bind_expression_v<TiD>,
-    bool = ((std::is_placeholder_v<TiD>) > 0)>
+template<class TDi,
+    bool = is_reference_wrapper_v<TDi>,
+    bool = std::is_bind_expression_v<TDi>,
+    bool = ((std::is_placeholder_v<TDi>) > 0)>
 struct BoundArgument;
 
-template<class TiD>
-struct BoundArgument<TiD, true, false, false> {
-    template<class cvTiD, class... Uj>
-    static constexpr auto value(cvTiD& tid, Uj&&...)
-        -> typename TiD::type&
+template<class TDi>
+struct BoundArgument<TDi, true, false, false> {
+    template<class cvTDi, class... U>
+    static constexpr auto value(cvTDi& tdi, U&&...)
+        -> typename TDi::type&
     {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTiD>, TiD>);
-        return tid.get();
+        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
+        return tdi.get();
     }
     template<class...>
-    using type = typename TiD::type&;
+    using type = typename TDi::type&;
     template<class...>
-    using const_type = typename TiD::type&;
+    using const_type = typename TDi::type&;
 };
 
-template<class TiD>
-struct BoundArgument<TiD, false, true, false> {
-    template<class cvTiD, class... Uj>
-    static constexpr auto value(cvTiD& tid, Uj&&... uj)
-        -> std::invoke_result_t<cvTiD&, Uj&&...>
+template<class TDi>
+struct BoundArgument<TDi, false, true, false> {
+    template<class cvTDi, class... U>
+    static constexpr auto value(cvTDi& tdi, U&&... u)
+        -> std::invoke_result_t<cvTDi&, U&&...>
     {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTiD>, TiD>);
-        return tid(std::forward<Uj>(uj)...);
+        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
+        return tdi(std::forward<U>(u)...);
     }
-    template<class... Uj>
-    using type = std::invoke_result_t<TiD&, Uj&&...>;
-    template<class... Uj>
-    using const_type = std::invoke_result_t<TiD const&, Uj&&...>;
+    template<class... U>
+    using type = std::invoke_result_t<TDi&, U&&...>;
+    template<class... U>
+    using const_type = std::invoke_result_t<TDi const&, U&&...>;
 };
 
-template<class TiD>
-struct BoundArgument<TiD, false, false, true> {
-    static constexpr int position { std::is_placeholder_v<TiD> - 1 };
-    template<class cvTiD, class... Uj>
-    static constexpr auto value(cvTiD& tid, Uj&&... uj)
-        -> std::tuple_element_t<position,std::tuple<Uj...>>
+template<class TDi>
+struct BoundArgument<TDi, false, false, true> {
+    static constexpr int position { std::is_placeholder_v<TDi> - 1 };
+    template<class cvTDi, class... U>
+    static constexpr auto value(cvTDi& tdi, U&&... u)
+        -> std::tuple_element_t<position,std::tuple<U...>>
     {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTiD>, TiD>);
-        return std::get<position>(std::forward_as_tuple(std::forward<Uj>(uj)...));
+        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
+        return std::get<position>(std::forward_as_tuple(std::forward<U>(u)...));
     }
-    template<class... Uj>
-    using type = std::tuple_element_t<position,std::tuple<Uj...>>;
-    template<class... Uj>
-    using const_type = std::tuple_element_t<position,std::tuple<Uj...>>;
+    template<class... U>
+    using type = std::tuple_element_t<position, std::tuple<U...>>;
+    template<class... U>
+    using const_type = std::tuple_element_t<position, std::tuple<U...>>;
 };
 
-template<class TiD, bool, bool, bool>
+template<class TDi, bool, bool, bool>
 struct BoundArgument {
-    template<class cvTiD, class... Uj>
-    static constexpr auto value(cvTiD& tid, Uj&&...)
-        -> cvTiD&
+    template<class cvTDi, class... U>
+    static constexpr auto value(cvTDi& tdi, U&&...)
+        -> cvTDi&
     {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTiD>, TiD>);
-        return tid;
+        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
+        return tdi;
     }
     template<class...>
-    using type = TiD&;
+    using type = TDi&;
     template<class...>
-    using const_type = TiD const&;
+    using const_type = TDi const&;
 };
 
 template<class FD, class R, class... BoundArgs>
@@ -82,7 +82,7 @@ private:
     template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
              class T = R, std::enable_if_t<std::is_same_v<T,void(void)>, int> = 0>
     static constexpr decltype(auto) unpack_bound_args(cvFD& fd,
-                         /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
+                         /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args,
                                                       std::index_sequence<idx...>,
                                                       UnBoundArgs&&... unbound_args
                                                      ) {
@@ -92,12 +92,12 @@ private:
     template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
              class T = R, std::enable_if_t<!std::is_same_v<T,void(void)>, int> = 0>
     static constexpr T unpack_bound_args(cvFD& fd,
-            /* cv std::tuple<TiD...>& */ BoundArgTpl& bound_args,
+            /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args,
                                          std::index_sequence<idx...>,
                                          UnBoundArgs&&... unbound_args
                                         ) {
-        return (invoke<T>)(fd,BoundArgument<BoundArgs>::value(std::get<idx>(bound_args),
-                                                              std::forward<UnBoundArgs>(unbound_args)...)...);
+        return (invoke<T>)(fd, BoundArgument<BoundArgs>::value(std::get<idx>(bound_args),
+                                                               std::forward<UnBoundArgs>(unbound_args)...)...);
     }
 public:
     template<class... UnBoundArgs>
