@@ -32,15 +32,15 @@ template<class TiD>
 struct BoundArgument<TiD, false, true, false> {
     template<class cvTiD, class... Uj>
     static constexpr auto value(cvTiD& tid, Uj&&... uj)
-        -> std::result_of_t<cvTiD& (Uj&&...)>
+        -> std::invoke_result_t<cvTiD&, Uj&&...>
     {
         static_assert(std::is_same_v<std::remove_cv_t<cvTiD>, TiD>);
         return tid(std::forward<Uj>(uj)...);
     }
     template<class... Uj>
-    using type = std::result_of_t<TiD& (Uj&&...)>;
+    using type = std::invoke_result_t<TiD&, Uj&&...>;
     template<class... Uj>
-    using const_type = std::result_of_t<TiD const& (Uj&&...)>;
+    using const_type = std::invoke_result_t<TiD const&, Uj&&...>;
 };
 
 template<class TiD>
@@ -58,9 +58,6 @@ struct BoundArgument<TiD, false, false, true> {
     template<class... Uj>
     using const_type = std::tuple_element_t<position,std::tuple<Uj...>>;
 };
-
-template<class TiD>
-const int BoundArgument<TiD, false, false, true>::position;
 
 template<class TiD, bool, bool, bool>
 struct BoundArgument {
@@ -106,8 +103,8 @@ public:
     template<class... UnBoundArgs>
     constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) {
         static_assert(
-            std::is_callable_v<
-                FD& (typename BoundArgument<BoundArgs>::template type<UnBoundArgs&&...>...)
+            std::is_invocable_v<
+                FD&, typename BoundArgument<BoundArgs>::template type<UnBoundArgs&&...>...
             >,
             "The target object is not callable with the given arguments."
         );
@@ -119,8 +116,8 @@ public:
     template<class... UnBoundArgs>
     constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) const {
         static_assert(
-            std::is_callable_v<
-                FD const& (typename BoundArgument<BoundArgs>::template const_type<UnBoundArgs&&...>...)
+            std::is_invocable_v<
+                FD const&, typename BoundArgument<BoundArgs>::template const_type<UnBoundArgs&&...>...
             >,
             "The target object is not callable with the given arguments."
         );
