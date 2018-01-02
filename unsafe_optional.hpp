@@ -67,6 +67,7 @@
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
+
 #include "smf_control.hpp"
 
 template<class T>
@@ -85,7 +86,7 @@ private:
     constexpr unsafe_optional_data() noexcept : uninitialized() {}
     template<class... Args>
     constexpr explicit unsafe_optional_data(std::in_place_t, Args&&... args)
-        : val(std::forward<Args>(args)...) {}
+        : val(static_cast<Args&&>(args)...) {}
     ~unsafe_optional_data() = default;
 };
 
@@ -93,7 +94,7 @@ private:
 // that the destructor is explicitly defined.
 template<class T>
 union unsafe_optional_data<T,
-    std::enable_if_t<!std::is_trivially_destructible<T>{}()>
+    std::enable_if_t<!std::is_trivially_destructible_v<T>>
 > {
     friend unsafe_optional_impl<T>;
 private:
@@ -103,7 +104,7 @@ private:
     constexpr unsafe_optional_data() noexcept : uninitialized() {}
     template<class... Args>
     constexpr explicit unsafe_optional_data(std::in_place_t, Args&&... args)
-        : val(std::forward<Args>(args)...) {}
+        : val(static_cast<Args&&>(args)...) {}
     ~unsafe_optional_data() {}
 };
 
@@ -148,16 +149,16 @@ public:
     constexpr unsafe_optional_impl(T&& v) : data(std::in_place, std::move(v)) {}
     template<class... Args>
     constexpr explicit unsafe_optional_impl(std::in_place_t, Args&&... args)
-        : data(std::in_place, std::forward<Args>(args)...) {}
+        : data(std::in_place, static_cast<Args&&>(args)...) {}
     template <class U, class... Args,
         std::enable_if_t<
-            std::is_constructible<T,std::initializer_list<U>&,Args&&...>{}(),
+            std::is_constructible_v<T,std::initializer_list<U>&,Args&&...>,
             int> = 0
     >
     constexpr explicit unsafe_optional_impl(
         std::in_place_t, std::initializer_list<U> il, Args&&... args
     )
-        : data(std::in_place, il, std::forward<Args>(args)...) {}
+        : data(std::in_place, il, static_cast<Args&&>(args)...) {}
 
     ~unsafe_optional_impl() = default;
 
@@ -165,14 +166,14 @@ public:
     unsafe_optional_impl& operator=(unsafe_optional_impl&&) = default;
 
     template<class... Args>
-    void emplace(Args&&... args) {
-        ::new(static_cast<void*>(std::addressof(data.val)))
-            T(std::forward<Args>(args)...);
+    T& emplace(Args&&... args) {
+        return *::new(static_cast<void*>(std::addressof(data.val)))
+            T(static_cast<Args&&>(args)...);
     }
     template<class U, class... Args>
-    void emplace(std::initializer_list<U> il, Args&&... args) {
-        ::new(static_cast<void*>(std::addressof(data.val)))
-            T(il, std::forward<Args>(args)...);
+    T& emplace(std::initializer_list<U> il, Args&&... args) {
+        return *::new(static_cast<void*>(std::addressof(data.val)))
+            T(il, static_cast<Args&&>(args)...);
     }
 
     constexpr T const& value() const& noexcept { return data.val; }
@@ -187,19 +188,19 @@ public:
 
 template<class T>
 class unsafe_optional : public
-    delete_copy_ctor_if<!std::is_trivially_copy_constructible<T>{}(),
-    default_move_ctor_if<std::is_trivially_copy_constructible<T>{}(),
-    delete_copy_assign_if<!std::is_trivially_copy_assignable<T>{}(),
-    delete_move_assign_if<!std::is_trivially_move_assignable<T>{}(),
+    delete_copy_ctor_if<!std::is_trivially_copy_constructible_v<T>,
+    default_move_ctor_if<std::is_trivially_copy_constructible_v<T>,
+    delete_copy_assign_if<!std::is_trivially_copy_assignable_v<T>,
+    delete_move_assign_if<!std::is_trivially_move_assignable_v<T>,
     unsafe_optional_impl<T>
 >>>> {
     static_assert(sizeof(unsafe_optional_data<T>) == sizeof(T),
         "The wrapper has unintended space overhead.");
     static_assert(alignof(unsafe_optional_data<T>) == alignof(T),
         "The wrapper has a different alignment from the wrapped type.");
-    static_assert(!std::is_reference<T>{}(), "T cannot be a reference type.");
+    static_assert(!std::is_reference_v<T>, "T cannot be a reference type.");
      // unsafe_optional_impl<unsafe_optional_impl> is quite useless.
-    static_assert(!is_unsafe_optional<std::remove_cv_t<T>>{}(),
+    static_assert(!is_unsafe_optional_v<std::remove_cv_t<T>>,
         "T cannot be a unsafe_optional_impl.");
     // unsafe_optional<std::in_place_t> and unsafe_optional<std::nullopt_t>
     // are not disabled, but they may be a bit tricky to use.
@@ -211,17 +212,17 @@ public:
 
 template<class T>
 constexpr unsafe_optional<std::decay_t<T>> make_unsafe_optional(T&& v) {
-    return unsafe_optional<std::decay_t<T>>(std::forward<T>(v));
+    return unsafe_optional<std::decay_t<T>>(static_cast<T&&>(v));
 }
 
 template<class T, class...Args>
 constexpr unsafe_optional<T> make_unsafe_optional(Args&&... args) {
-    return unsafe_optional<T>(std::in_place, std::forward<Args>(args)...);
+    return unsafe_optional<T>(std::in_place, static_cast<Args&&>(args)...);
 }
 
 template<class T, class U, class... Args>
 constexpr unsafe_optional<T> make_unsafe_optional(
     std::initializer_list<U> il, Args&&... args
 ) {
-    return unsafe_optional<T>(std::in_place, il, std::forward<Args>(args)...);
+    return unsafe_optional<T>(std::in_place, il, static_cast<Args&&>(args)...);
 }
