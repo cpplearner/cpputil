@@ -48,9 +48,9 @@
         // Assignment
         unsafe_optional& operator=(const unsafe_optional&);
         unsafe_optional& operator=(unsafe_optional&&);
-        template<class... Args> void emplace(Args&&...);
+        template<class... Args> T& emplace(Args&&...);
         template<class U, class... Args>
-        void emplace(std::initializer_list<U>, Args&&...);
+        T& emplace(std::initializer_list<U>, Args&&...);
 
         // Observers
         constexpr T const& value() const &;
@@ -113,23 +113,6 @@ struct is_unsafe_optional : std::false_type {};
 template<class T>
 struct is_unsafe_optional<unsafe_optional<T>> : std::true_type {};
 
-// A unsafe_optional is similar to a std::optional, except that
-// the initialization state of the contained object is not tracked.
-// Compared to std::optional, unsafe_optional lacks observer functions
-// such like has_value/operator bool, and it lacks value_or,
-// comparison operators, and specialization of std::hash.
-// unsafe_optional<T> is not copy constructible unless T is trivially
-// copy constructible.
-// unsafe_optional<T> is move constructible, but its move constructor always
-// throws unless T is trivially move constructble.
-// Move constructing unsafe_optional<T> will throw an exception, unless
-// T is trivially move constructble or the move construction is elided.
-// unsafe_optional<T> is not copy/move assignable unless T is trivially
-// copy/move assignable.
-// Overloaded operators such as operator*, operator-> and operator=
-// are not provided; instead, all functions are named, to avoid accidental use.
-// Use a unsafe_optional only when the initialization state is known outside
-// or when the use only involves constant expressions.
 template<class T>
 class unsafe_optional_impl {
     unsafe_optional_data<T> data;
@@ -186,6 +169,21 @@ public:
     void reset() noexcept { data.val.~T(); }
 };
 
+// A unsafe_optional is similar to a std::optional, except that
+// the initialization state of the contained object is not tracked.
+// Compared to std::optional, unsafe_optional lacks observer functions
+// such like has_value/operator bool, and it lacks value_or,
+// comparison operators, and specialization of std::hash.
+// unsafe_optional<T> is not copy constructible unless T is trivially
+// copy constructible.
+// Move constructing unsafe_optional<T> will throw an exception, unless
+// T is trivially move constructble or the move construction is elided.
+// unsafe_optional<T> is not copy/move assignable unless T is trivially
+// copy/move assignable.
+// Overloaded operators such as operator*, operator-> and operator=
+// are not provided; instead, all functions are named, to avoid accidental use.
+// Use a unsafe_optional only when the initialization state is known outside
+// or when the use only involves constant expressions.
 template<class T>
 class unsafe_optional : public
     delete_copy_ctor_if<!std::is_trivially_copy_constructible_v<T>,
@@ -200,10 +198,10 @@ class unsafe_optional : public
         "The wrapper has a different alignment from the wrapped type.");
     static_assert(!std::is_reference_v<T>, "T cannot be a reference type.");
      // unsafe_optional_impl<unsafe_optional_impl> is quite useless.
-    static_assert(!is_unsafe_optional_v<std::remove_cv_t<T>>,
+    static_assert(!is_unsafe_optional<std::remove_cv_t<T>>::value,
         "T cannot be a unsafe_optional_impl.");
     // unsafe_optional<std::in_place_t> and unsafe_optional<std::nullopt_t>
-    // are not disabled, but they may be a bit tricky to use.
+    // are allowed, but they may be a bit tricky to use.
 
     using base = typename unsafe_optional::delete_copy_ctor_if;
 public:
