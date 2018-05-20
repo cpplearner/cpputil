@@ -6,31 +6,27 @@
 
 #include "invoke.hpp"
 
-template<class Visitor, class Variant, class IndexSeq>
-struct visit_return_type;
-
-template<class Visitor, class Variant, std::size_t... I>
-struct visit_return_type<Visitor, Variant, std::index_sequence<I...>> {
-    using type = std::common_type_t<std::invoke_result_t<
-        Visitor, decltype(std::get<I>(std::declval<Variant>()))>...>;
-};
-
 template<class Visitor, class Variant>
 constexpr decltype(auto) variant_visit(Visitor&& vis, Variant&& var) {
     constexpr auto size = std::variant_size_v<std::decay_t<Variant>>;
-    using R = typename visit_return_type<Visitor&&, Variant&&,
-        std::make_index_sequence<size>>::type;
-    auto f = [&vis, &var, index = var.index()](auto&& self, auto i) -> R {
-        // [[assert: &self == &f]];
+    using R = std::invoke_result_t<Visitor,
+        decltype(std::get<0>(std::declval<Variant>()))>;
+    auto f = [&vis, &var, index = var.index()](auto&& rec, auto i) -> R {
+        // [[assert: &rec == &f]];
         static_assert(0 <= i && i <= size);
-        if constexpr (decltype(i)::value == size)
+        if constexpr (i == size)
             throw std::bad_variant_access();
-        else if (i == index)
-            return (invoke)(static_cast<Visitor&&>(vis),
-                std::get<i>(static_cast<Variant&&>(var)));
-        else
-            return self(self, std::integral_constant<std::size_t, i + 1>{});
-        };
+        else {
+            static_assert(std::is_same_v<R, std::invoke_result_t<Visitor,
+                decltype(std::get<i>(std::declval<Variant>()))>>,
+                "visitor must return the same type for all alternatives!");
+            if (i == index)
+                return (invoke)(static_cast<Visitor&&>(vis),
+                    std::get<i>(static_cast<Variant&&>(var)));
+            else
+                return rec(rec, std::integral_constant<std::size_t, i + 1>{});
+        }
+    };
     return f(f, std::integral_constant<std::size_t, 0>{});
 }
 
