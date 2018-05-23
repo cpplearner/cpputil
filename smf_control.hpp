@@ -6,7 +6,7 @@
     struct user_provided_t {
         explicit user_provided_t() = default;
     };
-    constexpr user_provided_t user_provided{};
+    inline constexpr user_provided_t user_provided{};
 
     template<bool cond, class T> struct default_copy_ctor_if;
     template<bool cond, class T> struct default_move_ctor_if;
@@ -20,7 +20,7 @@
 struct user_provided_t {
     explicit user_provided_t() = default;
 };
-constexpr user_provided_t user_provided{};
+inline constexpr user_provided_t user_provided{};
 
 // All the following class templates inherit from the template parameter T and
 // introduce T's constructors and assignment operators into their own scope
