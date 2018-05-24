@@ -19,17 +19,13 @@ struct invoke_impl<A B::*> {
     template<class T,
         class = std::enable_if_t<std::is_base_of_v<B, std::decay_t<T>>>
     >
-    static constexpr auto get(T&& t)
-            noexcept(noexcept(static_cast<T&&>(t)))
-            -> decltype(static_cast<T&&>(t))
+    static constexpr auto get(T&& t) noexcept -> T&&
     { return static_cast<T&&>(t); }
 
     template<class T,
         class = std::enable_if_t<is_reference_wrapper_v<std::decay_t<T>>>
     >
-    static constexpr auto get(T&& t)
-            noexcept(noexcept(t.get()))
-            -> decltype(t.get())
+    static constexpr auto get(T&& t) noexcept -> decltype(t.get())
     { return t.get(); }
 
     template<class T,
