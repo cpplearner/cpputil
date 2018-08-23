@@ -63,33 +63,20 @@ constexpr auto invoke(F&& f, Args&&... args)
         static_cast<F&&>(f), static_cast<Args&&>(args)...);
 }
 
-template<class T>
-void implicit_cast(T) noexcept;
-
 template<class R, class F, class... Args,
-    class = std::enable_if_t<!std::is_void_v<R>>,
-    class = decltype((implicit_cast<R>)(
-        invoke_impl<std::decay_t<F>>::call(
-            std::declval<F>(), std::declval<Args>()...)))
+    class E = decltype(invoke_impl<std::decay_t<F>>::call(
+        std::declval<F>(), std::declval<Args>()...)),
+    class = std::enable_if_t<std::is_void_v<R> || std::is_convertible_v<E,R>>
 >
 constexpr R invoke(F&& f, Args&&... args)
-    noexcept(noexcept((implicit_cast<R>)(
-        invoke_impl<std::decay_t<F>>::call(
-            static_cast<F&&>(f), static_cast<Args&&>(args)...))))
-{
-    return invoke_impl<std::decay_t<F>>::call(
-        static_cast<F&&>(f), static_cast<Args&&>(args)...);
-}
-
-template<class R, class F, class... Args,
-    class = std::enable_if_t<std::is_void_v<R>>,
-    class = decltype(invoke_impl<std::decay_t<F>>::call(
-        std::declval<F>(), std::declval<Args>()...))
->
-constexpr void invoke(F&& f, Args&&... args)
     noexcept(noexcept(invoke_impl<std::decay_t<F>>::call(
-        static_cast<F&&>(f), static_cast<Args&&>(args)...)))
+        static_cast<F&&>(f), static_cast<Args&&>(args)...)) &&
+        (std::is_void_v<R> || std::is_nothrow_convertible_v<E,R>))
 {
-    invoke_impl<std::decay_t<F>>::call(
-        static_cast<F&&>(f), static_cast<Args&&>(args)...);
+    if constexpr (!std::is_void_v<R>)
+        return invoke_impl<std::decay_t<F>>::call(
+            static_cast<F&&>(f), static_cast<Args&&>(args)...);
+    else
+        invoke_impl<std::decay_t<F>>::call(
+            static_cast<F&&>(f), static_cast<Args&&>(args)...);
 }
