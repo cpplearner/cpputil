@@ -11,17 +11,17 @@ template<class TDi,
     bool = is_reference_wrapper_v<TDi>,
     bool = std::is_bind_expression_v<TDi>,
     bool = ((std::is_placeholder_v<TDi>) > 0)>
-struct BoundArgument;
+struct BoundArgument {
+    static constexpr int position { 0 };
+    template<class...>
+    using type = TDi&;
+    template<class...>
+    using const_type = TDi const&;
+};
 
 template<class TDi>
 struct BoundArgument<TDi, true, false, false> {
-    template<class cvTDi, class... U>
-    static constexpr auto value(cvTDi& tdi, U&&...)
-        -> typename TDi::type&
-    {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
-        return tdi.get();
-    }
+    static constexpr int position { 0 };
     template<class...>
     using type = typename TDi::type&;
     template<class...>
@@ -30,13 +30,7 @@ struct BoundArgument<TDi, true, false, false> {
 
 template<class TDi>
 struct BoundArgument<TDi, false, true, false> {
-    template<class cvTDi, class... U>
-    static constexpr auto value(cvTDi& tdi, U&&... u)
-        -> std::invoke_result_t<cvTDi&, U&&...>
-    {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
-        return tdi(std::forward<U>(u)...);
-    }
+    static constexpr int position { 0 };
     template<class... U>
     using type = std::invoke_result_t<TDi&, U&&...>;
     template<class... U>
@@ -45,33 +39,11 @@ struct BoundArgument<TDi, false, true, false> {
 
 template<class TDi>
 struct BoundArgument<TDi, false, false, true> {
-    static constexpr int position { std::is_placeholder_v<TDi> - 1 };
-    template<class cvTDi, class... U>
-    static constexpr auto value(cvTDi& tdi, U&&... u)
-        -> std::tuple_element_t<position,std::tuple<U...>>
-    {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
-        return std::get<position>(std::forward_as_tuple(std::forward<U>(u)...));
-    }
+    static constexpr int position { std::is_placeholder_v<TDi> };
     template<class... U>
-    using type = std::tuple_element_t<position, std::tuple<U...>>;
+    using type = std::tuple_element_t<position - 1, std::tuple<U...>>;
     template<class... U>
-    using const_type = std::tuple_element_t<position, std::tuple<U...>>;
-};
-
-template<class TDi, bool, bool, bool>
-struct BoundArgument {
-    template<class cvTDi, class... U>
-    static constexpr auto value(cvTDi& tdi, U&&...)
-        -> cvTDi&
-    {
-        static_assert(std::is_same_v<std::remove_cv_t<cvTDi>, TDi>);
-        return tdi;
-    }
-    template<class...>
-    using type = TDi&;
-    template<class...>
-    using const_type = TDi const&;
+    using const_type = std::tuple_element_t<position - 1, std::tuple<U...>>;
 };
 
 template<class FD, class R, class... BoundArgs>
@@ -79,25 +51,30 @@ struct Bind {
     FD fd;
     std::tuple<BoundArgs...> bound_args;
 private:
-    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
-             class T = R, std::enable_if_t<std::is_same_v<T,void(void)>, int> = 0>
-    static constexpr decltype(auto) unpack_bound_args(cvFD& fd,
-                         /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args,
-                                                      std::index_sequence<idx...>,
-                                                      UnBoundArgs&&... unbound_args
-                                                     ) {
-        return (invoke)(fd, BoundArgument<BoundArgs>::value(std::get<idx>(bound_args),
-                                                            std::forward<UnBoundArgs>(unbound_args)...)...);
+    template<class cvTDi, class... U>
+    static constexpr decltype(auto) transform_args(cvTDi&& tdi, U&&... u) {
+        using TDi = std::remove_cvref_t<cvTDi>;
+        if constexpr (is_reference_wrapper_v<TDi>)
+            return tdi.get();
+        else if constexpr (std::is_bind_expression_v<TDi>)
+            return tdi(std::forward<U>(u)...);
+        else if constexpr ((std::is_placeholder_v<TDi>) > 0) {
+            constexpr std::size_t position = std::is_placeholder_v<TDi>;
+            return std::get<position - 1>(std::forward_as_tuple(std::forward<U>(u)...));
+        } else
+            return (tdi);
     }
-    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx,
-             class T = R, std::enable_if_t<!std::is_same_v<T,void(void)>, int> = 0>
-    static constexpr T unpack_bound_args(cvFD& fd,
-            /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args,
-                                         std::index_sequence<idx...>,
-                                         UnBoundArgs&&... unbound_args
-                                        ) {
-        return (invoke<T>)(fd, BoundArgument<BoundArgs>::value(std::get<idx>(bound_args),
-                                                               std::forward<UnBoundArgs>(unbound_args)...)...);
+    template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx>
+    static constexpr decltype(auto) call(cvFD& fd,
+        /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args, std::index_sequence<idx...>,
+        UnBoundArgs&&... unbound_args
+    ) {
+        if constexpr (std::is_same_v<R, void(void)>)
+            return (invoke)(fd, transform_args(std::get<idx>(bound_args),
+                std::forward<UnBoundArgs>(unbound_args)...)...);
+        else
+            return (invoke<R>)(fd, transform_args(std::get<idx>(bound_args),
+                std::forward<UnBoundArgs>(unbound_args)...)...);
     }
 public:
     template<class... UnBoundArgs>
@@ -108,11 +85,9 @@ public:
             >,
             "The target object is not callable with the given arguments."
         );
-        return unpack_bound_args(fd, bound_args,
-                                 std::index_sequence_for<BoundArgs...>{},
-                                 std::forward<UnBoundArgs>(unbound_args)...);
+        return (call)(fd, bound_args, std::index_sequence_for<BoundArgs...>{},
+            std::forward<UnBoundArgs>(unbound_args)...);
     }
-    
     template<class... UnBoundArgs>
     constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) const {
         static_assert(
@@ -121,9 +96,8 @@ public:
             >,
             "The target object is not callable with the given arguments."
         );
-        return unpack_bound_args(fd, bound_args,
-                                 std::index_sequence_for<BoundArgs...>{},
-                                 std::forward<UnBoundArgs>(unbound_args)...);
+        return (call)(fd, bound_args, std::index_sequence_for<BoundArgs...>{},
+            std::forward<UnBoundArgs>(unbound_args)...);
     }
 };
 
