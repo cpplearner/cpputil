@@ -52,7 +52,7 @@ struct Bind {
     std::tuple<BoundArgs...> bound_args;
 private:
     template<class cvTDi, class... U>
-    static constexpr decltype(auto) transform_args(cvTDi&& tdi, U&&... u) {
+    static constexpr decltype(auto) transform_args(cvTDi& tdi, U&&... u) {
         using TDi = std::remove_cvref_t<cvTDi>;
         if constexpr (is_reference_wrapper_v<TDi>)
             return tdi.get();
@@ -62,8 +62,9 @@ private:
             constexpr std::size_t position = std::is_placeholder_v<TDi>;
             return std::get<position - 1>(std::forward_as_tuple(std::forward<U>(u)...));
         } else
-            return (tdi);
+            return tdi;
     }
+
     template<class cvFD, class BoundArgTpl, class... UnBoundArgs, std::size_t... idx>
     static constexpr decltype(auto) call(cvFD& fd,
         /* cv std::tuple<TDi...>& */ BoundArgTpl& bound_args, std::index_sequence<idx...>,
@@ -88,6 +89,7 @@ public:
         return (call)(fd, bound_args, std::index_sequence_for<BoundArgs...>{},
             std::forward<UnBoundArgs>(unbound_args)...);
     }
+
     template<class... UnBoundArgs>
     constexpr decltype(auto) operator()(UnBoundArgs&&... unbound_args) const {
         static_assert(
